@@ -1,4 +1,40 @@
-import { App, Modal, Notice, Plugin, Setting, requestUrl } from "obsidian";
+import { App, Modal, Notice, Plugin, Setting, requestUrl, PluginSettingTab } from "obsidian";
+
+interface TweetSaverSettings {
+	tweetsFolder: string;
+}
+
+const DEFAULT_SETTINGS: Partial<TweetSaverSettings> = {
+	tweetsFolder: 'Tweets',
+};
+
+export class TweetSaverSettingTab extends PluginSettingTab {
+	plugin: MyPlugin;
+
+	constructor(app: App, plugin: MyPlugin) {
+		super(app, plugin);
+		this.plugin = plugin;
+	}
+
+	display(): void {
+		const { containerEl } = this;
+
+		containerEl.empty();
+
+		new Setting(containerEl)
+			.setName('Tweets folder')
+			.setDesc('Choose where to save your tweets. Leave empty to save in your vault\'s root folder, or specify a path like "Bookmarks/Tweets" to organize them in subfolders.')
+			.addText((text) =>
+				text
+					.setPlaceholder('Tweets')
+					.setValue(this.plugin.settings.tweetsFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.tweetsFolder = value;
+						await this.plugin.saveSettings();
+					})
+			);
+	}
+}
 
 export class TweetUrlModal extends Modal {
 	constructor(app: App, onSubmit: (result: string) => void) {
@@ -37,8 +73,11 @@ export class TweetUrlModal extends Modal {
 
 export default class MyPlugin extends Plugin {
 	tweetUrls: string[] = [];
+	settings: TweetSaverSettings;
 
 	async onload() {
+		await this.loadSettings();
+
 		// Add Twitter icon to the ribbon
 		this.addRibbonIcon("twitter", "Save Tweet", () => {
 			this.openTweetUrlModal();
@@ -52,6 +91,17 @@ export default class MyPlugin extends Plugin {
 				this.openTweetUrlModal();
 			},
 		});
+
+		// Add settings tab
+		this.addSettingTab(new TweetSaverSettingTab(this.app, this));
+	}
+
+	async loadSettings() {
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+	}
+
+	async saveSettings() {
+		await this.saveData(this.settings);
 	}
 
 	openTweetUrlModal() {
