@@ -1,11 +1,10 @@
 {
-	"id": "sample-plugin",
-	"name": "Sample Plugin",
+	"id": "x-post-saver",
+	"name": "X Post Saver",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"description": "Saves X (formerly Twitter) posts' text data to new notes or inside a specific directory in your vault.",
+	"author": "Tanaka Mambinge",
+	"authorUrl": "https://x.com/iamt12e",
 	"isDesktopOnly": false
 }

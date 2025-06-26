@@ -1,4 +1,4 @@
-# Tweet Saver (Desktop and mobile app plugin)
+# X Post Saver (Desktop and mobile app plugin)
 
 Saves a tweet's text data to a new note or inside a specific directory in Obsidian.
 
