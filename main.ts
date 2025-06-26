@@ -100,7 +100,6 @@ export class TweetUrlModal extends Modal {
 }
 
 export default class MyPlugin extends Plugin {
-	tweetUrls: string[] = [];
 	settings: TweetSaverSettings;
 
 	async onload() {
@@ -139,9 +138,8 @@ export default class MyPlugin extends Plugin {
 	openTweetUrlModal() {
 		new TweetUrlModal(this.app, async (tweetUrl) => {
 			if (tweetUrl.trim()) {
-				this.tweetUrls.push(tweetUrl);
 				new Notice(`Fetching tweet data...`);
-				console.log("Tweet URL stored:", tweetUrl);
+				console.log("Tweet URL:", tweetUrl);
 
 				try {
 					// Encode the tweet URL for the API request
@@ -184,10 +182,8 @@ export default class MyPlugin extends Plugin {
 					new Notice(`Tweet saved successfully!`);
 				} catch (error) {
 					console.error("Error fetching tweet data:", error);
-					new Notice(`Error fetching tweet data: ${error.message}`);
+					new Notice(`Error fetching tweet data`);
 				}
-
-				console.log("All stored URLs:", this.tweetUrls);
 			} else {
 				new Notice("Please enter a valid tweet URL");
 			}
@@ -285,8 +281,8 @@ export default class MyPlugin extends Plugin {
 
 			// Copy path to clipboard if setting is enabled
 			if (this.settings.copyPathToClipboard) {
-				await navigator.clipboard.writeText(`[[${fullPath}]]`);
-				console.log(`Path copied to clipboard: ${fullPath}`);
+				await navigator.clipboard.writeText(`[[${filename}]]`);
+				console.log(`Filename copied to clipboard: ${filename}`);
 			}
 		} catch (error) {
 			console.error("Error saving tweet as note:", error);
@@ -315,7 +311,16 @@ export default class MyPlugin extends Plugin {
 				minute: "2-digit",
 			});
 
-		return `# Tweet by ${author_name}
+		// Format date for YAML (ISO format for date & time properties)
+		const yamlDateTime = now.toISOString();
+
+		return `---
+author: "${author_name}"
+author_url: "${author_url}"
+tweet_url: "${url}"
+date_saved: ${yamlDateTime}
+---
+# Tweet by ${author_name}
 
 **Author:** [${author_name}](${author_url})
 **Original Tweet:** [View on Twitter](${url})
