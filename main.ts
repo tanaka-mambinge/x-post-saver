@@ -12,10 +12,12 @@ import {
 
 interface TweetSaverSettings {
 	tweetsFolder: string;
+	copyPathToClipboard: boolean;
 }
 
 const DEFAULT_SETTINGS: Partial<TweetSaverSettings> = {
 	tweetsFolder: "Tweets",
+	copyPathToClipboard: true,
 };
 
 export class TweetSaverSettingTab extends PluginSettingTab {
@@ -42,6 +44,20 @@ export class TweetSaverSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.tweetsFolder)
 					.onChange(async (value) => {
 						this.plugin.settings.tweetsFolder = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Copy note path to clipboard")
+			.setDesc(
+				"Automatically copy the path to the saved tweet note to your clipboard after saving."
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.copyPathToClipboard)
+					.onChange(async (value) => {
+						this.plugin.settings.copyPathToClipboard = value;
 						await this.plugin.saveSettings();
 					})
 			);
@@ -191,10 +207,13 @@ export default class MyPlugin extends Plugin {
 
 			if (tweetParagraph) {
 				// Replace <br> tags with newlines before extracting text
-				const htmlWithNewlines = tweetParagraph.innerHTML.replace(/<br\s*\/?>/gi, '\n');
-				
+				const htmlWithNewlines = tweetParagraph.innerHTML.replace(
+					/<br\s*\/?>/gi,
+					"\n"
+				);
+
 				// Create a temporary element to extract clean text
-				const tempDiv = document.createElement('div');
+				const tempDiv = document.createElement("div");
 				tempDiv.innerHTML = htmlWithNewlines;
 				let text = tempDiv.textContent || "";
 
@@ -262,6 +281,12 @@ export default class MyPlugin extends Plugin {
 				// File doesn't exist, create new one
 				await vault.create(fullPath, markdownContent);
 				console.log(`Tweet saved as: ${fullPath}`);
+			}
+
+			// Copy path to clipboard if setting is enabled
+			if (this.settings.copyPathToClipboard) {
+				await navigator.clipboard.writeText(`[[${fullPath}]]`);
+				console.log(`Path copied to clipboard: ${fullPath}`);
 			}
 		} catch (error) {
 			console.error("Error saving tweet as note:", error);
