@@ -1,11 +1,21 @@
-import { App, Modal, Notice, Plugin, Setting, requestUrl, PluginSettingTab } from "obsidian";
+import {
+	App,
+	Modal,
+	normalizePath,
+	Notice,
+	Plugin,
+	PluginSettingTab,
+	requestUrl,
+	Setting,
+	TFile,
+} from "obsidian";
 
 interface TweetSaverSettings {
 	tweetsFolder: string;
 }
 
 const DEFAULT_SETTINGS: Partial<TweetSaverSettings> = {
-	tweetsFolder: 'Tweets',
+	tweetsFolder: "Tweets",
 };
 
 export class TweetSaverSettingTab extends PluginSettingTab {
@@ -22,11 +32,13 @@ export class TweetSaverSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Tweets folder')
-			.setDesc('Choose where to save your tweets. Leave empty to save in your vault\'s root folder, or specify a path like "Bookmarks/Tweets" to organize them in subfolders.')
+			.setName("Tweets folder")
+			.setDesc(
+				'Choose where to save your tweets. Leave empty to save in your vault\'s root folder, or specify a path like "Bookmarks/Tweets" to organize them in subfolders.'
+			)
 			.addText((text) =>
 				text
-					.setPlaceholder('Tweets')
+					.setPlaceholder("Tweets")
 					.setValue(this.plugin.settings.tweetsFolder)
 					.onChange(async (value) => {
 						this.plugin.settings.tweetsFolder = value;
@@ -97,7 +109,11 @@ export default class MyPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		this.settings = Object.assign(
+			{},
+			DEFAULT_SETTINGS,
+			await this.loadData()
+		);
 	}
 
 	async saveSettings() {
@@ -141,7 +157,15 @@ export default class MyPlugin extends Plugin {
 						tweet_text: tweetText,
 					});
 
-					new Notice(`Tweet data extracted successfully`);
+					// Save tweet as note
+					await this.saveTweetAsNote({
+						url,
+						author_name,
+						author_url,
+						tweet_text: tweetText,
+					});
+
+					new Notice(`Tweet saved successfully!`);
 				} catch (error) {
 					console.error("Error fetching tweet data:", error);
 					new Notice(`Error fetching tweet data: ${error.message}`);
@@ -166,8 +190,13 @@ export default class MyPlugin extends Plugin {
 			);
 
 			if (tweetParagraph) {
-				// Get the text content and clean it up
-				let text = tweetParagraph.textContent || "";
+				// Replace <br> tags with newlines before extracting text
+				const htmlWithNewlines = tweetParagraph.innerHTML.replace(/<br\s*\/?>/gi, '\n');
+				
+				// Create a temporary element to extract clean text
+				const tempDiv = document.createElement('div');
+				tempDiv.innerHTML = htmlWithNewlines;
+				let text = tempDiv.textContent || "";
 
 				// Remove any trailing URLs (t.co links)
 				text = text.replace(/https:\/\/t\.co\/\w+$/, "").trim();
@@ -180,5 +209,96 @@ export default class MyPlugin extends Plugin {
 			console.error("Error extracting tweet text:", error);
 			return "Error extracting tweet text";
 		}
+	}
+
+	async saveTweetAsNote(tweetData: {
+		url: string;
+		author_name: string;
+		author_url: string;
+		tweet_text: string;
+	}) {
+		try {
+			const { vault } = this.app;
+
+			// Determine the folder path
+			const folderPath = this.settings.tweetsFolder.trim() || "";
+
+			// Create folders if they don't exist
+			if (folderPath) {
+				const normalizedPath = normalizePath(folderPath);
+				const folder = vault.getAbstractFileByPath(normalizedPath);
+
+				if (!folder) {
+					await vault.createFolder(normalizedPath);
+					console.log(`Created folder: ${normalizedPath}`);
+				}
+			}
+
+			// Generate filename from author name and first 20 chars of tweet
+			const sanitizedAuthor = tweetData.author_name
+				.replace(/[^a-zA-Z0-9\s]/g, "")
+				.trim();
+			const first20Chars = tweetData.tweet_text
+				.substring(0, 20)
+				.replace(/[^a-zA-Z0-9\s]/g, "")
+				.trim();
+			const filename = `${sanitizedAuthor} - ${first20Chars}....md`;
+
+			// Create full file path
+			const fullPath = folderPath
+				? normalizePath(`${folderPath}/${filename}`)
+				: filename;
+
+			// Create markdown content
+			const markdownContent = this.createMarkdownContent(tweetData);
+
+			// Check if file already exists and handle accordingly
+			const existingFile = vault.getAbstractFileByPath(fullPath);
+			if (existingFile && existingFile instanceof TFile) {
+				// File exists, overwrite it
+				await vault.modify(existingFile, markdownContent);
+				console.log(`Tweet overwritten at: ${fullPath}`);
+			} else {
+				// File doesn't exist, create new one
+				await vault.create(fullPath, markdownContent);
+				console.log(`Tweet saved as: ${fullPath}`);
+			}
+		} catch (error) {
+			console.error("Error saving tweet as note:", error);
+			throw error;
+		}
+	}
+
+	createMarkdownContent(tweetData: {
+		url: string;
+		author_name: string;
+		author_url: string;
+		tweet_text: string;
+	}): string {
+		const { url, author_name, author_url, tweet_text } = tweetData;
+		const now = new Date();
+		const currentDateTime =
+			now.toLocaleDateString("en-US", {
+				year: "numeric",
+				month: "long",
+				day: "numeric",
+			}) +
+			" at " +
+			now.toLocaleTimeString("en-US", {
+				hour12: false,
+				hour: "2-digit",
+				minute: "2-digit",
+			});
+
+		return `# Tweet by ${author_name}
+
+**Author:** [${author_name}](${author_url})
+**Original Tweet:** [View on Twitter](${url})
+**Saved:** ${currentDateTime}
+
+---
+
+${tweet_text}
+`;
 	}
 }
