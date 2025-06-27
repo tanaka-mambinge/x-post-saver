@@ -20,10 +20,10 @@ const DEFAULT_SETTINGS: Partial<TweetSaverSettings> = {
 	copyPathToClipboard: true,
 };
 
-export class TweetSaverSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+export class XPostSaverSettingTab extends PluginSettingTab {
+	plugin: XPostSaverPlugin;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: XPostSaverPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -99,7 +99,7 @@ export class TweetUrlModal extends Modal {
 	}
 }
 
-export default class MyPlugin extends Plugin {
+export default class XPostSaverPlugin extends Plugin {
 	settings: TweetSaverSettings;
 
 	async onload() {
@@ -120,7 +120,7 @@ export default class MyPlugin extends Plugin {
 		});
 
 		// Add settings tab
-		this.addSettingTab(new TweetSaverSettingTab(this.app, this));
+		this.addSettingTab(new XPostSaverSettingTab(this.app, this));
 	}
 
 	async loadSettings() {
@@ -202,16 +202,20 @@ export default class MyPlugin extends Plugin {
 			);
 
 			if (tweetParagraph) {
-				// Replace <br> tags with newlines before extracting text
-				const htmlWithNewlines = tweetParagraph.innerHTML.replace(
-					/<br\s*\/?>/gi,
-					"\n"
-				);
+				// Clone the paragraph to avoid modifying the original
+				const clonedParagraph = tweetParagraph.cloneNode(
+					true
+				) as Element;
 
-				// Create a temporary element to extract clean text
-				const tempDiv = document.createElement("div");
-				tempDiv.innerHTML = htmlWithNewlines;
-				let text = tempDiv.textContent || "";
+				// Replace <br> tags with newline text nodes
+				const brElements = clonedParagraph.querySelectorAll("br");
+				brElements.forEach((br) => {
+					const newlineNode = document.createTextNode("\n");
+					br.parentNode?.replaceChild(newlineNode, br);
+				});
+
+				// Extract clean text content
+				let text = clonedParagraph.textContent || "";
 
 				// Remove any trailing URLs (t.co links)
 				text = text.replace(/https:\/\/t\.co\/\w+$/, "").trim();
