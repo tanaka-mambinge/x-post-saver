@@ -139,14 +139,11 @@ export default class XPostSaverPlugin extends Plugin {
 		new TweetUrlModal(this.app, async (tweetUrl) => {
 			if (tweetUrl.trim()) {
 				new Notice(`Fetching tweet data...`);
-				console.log("Tweet URL:", tweetUrl);
 
 				try {
 					// Encode the tweet URL for the API request
 					const encodedUrl = encodeURIComponent(tweetUrl);
 					const apiUrl = `https://publish.twitter.com/oembed?url=${encodedUrl}`;
-
-					console.log("Making request to:", apiUrl);
 
 					// Make GET request to Twitter publish API
 					const response = await requestUrl({
@@ -154,22 +151,12 @@ export default class XPostSaverPlugin extends Plugin {
 						method: "GET",
 					});
 
-					console.log("Full Response JSON:", response.json);
-
 					// Extract the required fields
 					const { url, author_name, author_url, html } =
 						response.json;
 
 					// Extract tweet text from HTML
 					const tweetText = this.extractTweetText(html);
-
-					// Log extracted data
-					console.log("Extracted data:", {
-						url,
-						author_name,
-						author_url,
-						tweet_text: tweetText,
-					});
 
 					// Save tweet as note
 					await this.saveTweetAsNote({
@@ -181,7 +168,6 @@ export default class XPostSaverPlugin extends Plugin {
 
 					new Notice(`Tweet saved successfully!`);
 				} catch (error) {
-					console.error("Error fetching tweet data:", error);
 					new Notice(`Error fetching tweet data`);
 				}
 			} else {
@@ -225,7 +211,6 @@ export default class XPostSaverPlugin extends Plugin {
 
 			return "Could not extract tweet text";
 		} catch (error) {
-			console.error("Error extracting tweet text:", error);
 			return "Error extracting tweet text";
 		}
 	}
@@ -249,7 +234,6 @@ export default class XPostSaverPlugin extends Plugin {
 
 				if (!folder) {
 					await vault.createFolder(normalizedPath);
-					console.log(`Created folder: ${normalizedPath}`);
 				}
 			}
 
@@ -276,20 +260,17 @@ export default class XPostSaverPlugin extends Plugin {
 			if (existingFile && existingFile instanceof TFile) {
 				// File exists, overwrite it
 				await vault.modify(existingFile, markdownContent);
-				console.log(`Tweet overwritten at: ${fullPath}`);
 			} else {
 				// File doesn't exist, create new one
 				await vault.create(fullPath, markdownContent);
-				console.log(`Tweet saved as: ${fullPath}`);
 			}
 
 			// Copy path to clipboard if setting is enabled
 			if (this.settings.copyPathToClipboard) {
 				await navigator.clipboard.writeText(`[[${filename}]]`);
-				console.log(`Filename copied to clipboard: ${filename}`);
 			}
 		} catch (error) {
-			console.error("Error saving tweet as note:", error);
+			new Notice("Error saving tweet as note");
 			throw error;
 		}
 	}
