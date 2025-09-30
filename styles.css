@@ -1,0 +1,17 @@
+.x-post-saver-controls-row {
+  display: flex;
+  gap: var(--spacing-xs, 0.5rem);
+  align-items: center;
+  margin-top: var(--spacing-xs, 0.5rem);
+  padding: var(--spacing-xs, 0.5rem);
+}
+
+.x-post-saver-text {
+  flex: 1 1 auto;
+}
+
+/* Button spacing to match Obsidian's buttons */
+.x-post-saver-controls-row .mod-cta,
+.x-post-saver-controls-row .mod-cta + .mod-cta {
+  margin-left: var(--spacing-xs, 0.5rem);
+}

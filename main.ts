@@ -97,9 +97,7 @@ export class TweetUrlModal extends Modal {
 
 		// Row under the description: input + paste button
 		const controlsRow = this.contentEl.createDiv({
-			attr: {
-				style: "display:flex; gap:8px; align-items:center; margin-top:6px; padding:8px;",
-			},
+			cls: "x-post-saver-controls-row",
 		});
 
 		const textComp = new TextComponent(controlsRow)
@@ -111,9 +109,9 @@ export class TweetUrlModal extends Modal {
 		// keep a reference to the input component so we can update it programmatically
 		// textComp is our reference to the input component
 
-		// Make input expand to available width
+		// Make input expand to available width via CSS class
 		if (textComp.inputEl) {
-			textComp.inputEl.style.flex = "1 1 auto";
+			textComp.inputEl.classList.add("x-post-saver-text");
 		}
 
 		new ButtonComponent(controlsRow)
