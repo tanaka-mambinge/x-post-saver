@@ -1,7 +1,7 @@
 {
 	"id": "x-post-saver",
 	"name": "X Post Saver",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"minAppVersion": "0.15.0",
 	"description": "Saves X (formerly Twitter) posts' text data to new notes or inside a specific directory in your vault.",
 	"author": "Tanaka Mambinge",
