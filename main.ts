@@ -7,6 +7,7 @@ import {
 	PluginSettingTab,
 	requestUrl,
 	Setting,
+	TextComponent,
 	TFile,
 } from "obsidian";
 
@@ -70,14 +71,34 @@ export class TweetUrlModal extends Modal {
 		this.setTitle("Save Tweet");
 
 		let tweetUrl = "";
+		let textInput: TextComponent | undefined;
 		new Setting(this.contentEl)
 			.setName("Tweet URL")
 			.setDesc("Enter the URL of the tweet you want to save")
-			.addText((text) =>
-				text
-					.setPlaceholder("https://twitter.com/username/status/...")
-					.onChange((value) => {
-						tweetUrl = value;
+			.addText((text) => {
+				textInput = text;
+				text.setPlaceholder(
+					"https://twitter.com/username/status/..."
+				).onChange((value) => {
+					tweetUrl = value;
+				});
+			})
+			.addButton((btn) =>
+				btn
+					.setIcon("paste")
+					.setTooltip("Paste from clipboard")
+					.onClick(async () => {
+						try {
+							const clip = await navigator.clipboard.readText();
+							if (clip && clip.trim()) {
+								tweetUrl = clip;
+								if (textInput) textInput.setValue(clip);
+							} else {
+								new Notice("Clipboard is empty");
+							}
+						} catch (e) {
+							new Notice("Failed to read clipboard");
+						}
 					})
 			);
 
@@ -146,10 +167,17 @@ export default class XPostSaverPlugin extends Plugin {
 					const apiUrl = `https://publish.twitter.com/oembed?url=${encodedUrl}`;
 
 					// Make GET request to Twitter publish API
-					const response = await requestUrl({
-						url: apiUrl,
-						method: "GET",
-					});
+					const response = await this.requestWithRetries(
+						() =>
+							requestUrl({
+								url: apiUrl,
+								method: "GET",
+							}),
+						3,
+						2000
+					);
+
+					console.log("Response:", response.json);
 
 					// Extract the required fields
 					const { url, author_name, author_url, html } =
@@ -174,6 +202,31 @@ export default class XPostSaverPlugin extends Plugin {
 				new Notice("Please enter a valid tweet URL");
 			}
 		}).open();
+	}
+
+	/**
+	 * Helper that retries an async request function up to `retries` times with a delay.
+	 * `fn` should be a zero-arg function that returns a Promise.
+	 */
+	async requestWithRetries<T>(
+		fn: () => Promise<T>,
+		retries: number,
+		delayMs: number
+	): Promise<T> {
+		let lastError: unknown;
+		for (let attempt = 1; attempt <= retries; attempt++) {
+			try {
+				return await fn();
+			} catch (err) {
+				lastError = err;
+				if (attempt < retries) {
+					// wait before next attempt
+					await new Promise((res) => setTimeout(res, delayMs));
+				}
+			}
+		}
+		// all attempts failed
+		throw lastError;
 	}
 
 	extractTweetText(html: string): string {
