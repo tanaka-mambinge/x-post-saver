@@ -1,5 +1,6 @@
 import {
 	App,
+	ButtonComponent,
 	Modal,
 	normalizePath,
 	Notice,
@@ -14,11 +15,13 @@ import {
 interface TweetSaverSettings {
 	tweetsFolder: string;
 	copyPathToClipboard: boolean;
+	openAfterSave: boolean;
 }
 
 const DEFAULT_SETTINGS: Partial<TweetSaverSettings> = {
 	tweetsFolder: "Tweets",
 	copyPathToClipboard: true,
+	openAfterSave: false,
 };
 
 export class XPostSaverSettingTab extends PluginSettingTab {
@@ -62,44 +65,84 @@ export class XPostSaverSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+
+		new Setting(containerEl)
+			.setName("Open saved note after saving")
+			.setDesc("Automatically open the saved tweet note after saving")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.openAfterSave)
+					.onChange(async (value) => {
+						this.plugin.settings.openAfterSave = value;
+						await this.plugin.saveSettings();
+					})
+			);
 	}
 }
 
 export class TweetUrlModal extends Modal {
-	constructor(app: App, onSubmit: (result: string) => void) {
+	constructor(
+		app: App,
+		onSubmit: (result: string, openAfterSave: boolean) => void,
+		initialOpenAfterSave = false
+	) {
 		super(app);
 		this.setTitle("Save Tweet");
 
 		let tweetUrl = "";
-		let textInput: TextComponent | undefined;
+		// Name and description on top
 		new Setting(this.contentEl)
 			.setName("Tweet URL")
-			.setDesc("Enter the URL of the tweet you want to save")
-			.addText((text) => {
-				textInput = text;
-				text.setPlaceholder(
-					"https://twitter.com/username/status/..."
-				).onChange((value) => {
-					tweetUrl = value;
-				});
-			})
-			.addButton((btn) =>
-				btn
-					.setIcon("paste")
-					.setTooltip("Paste from clipboard")
-					.onClick(async () => {
-						try {
-							const clip = await navigator.clipboard.readText();
-							if (clip && clip.trim()) {
-								tweetUrl = clip;
-								if (textInput) textInput.setValue(clip);
-							} else {
-								new Notice("Clipboard is empty");
-							}
-						} catch (e) {
-							new Notice("Failed to read clipboard");
-						}
-					})
+			.setDesc("Enter the URL of the tweet you want to save");
+
+		// Row under the description: input + paste button
+		const controlsRow = this.contentEl.createDiv({
+			attr: {
+				style: "display:flex; gap:8px; align-items:center; margin-top:6px; padding:8px;",
+			},
+		});
+
+		const textComp = new TextComponent(controlsRow)
+			.setPlaceholder("https://twitter.com/username/status/...")
+			.onChange((value) => {
+				tweetUrl = value;
+			});
+
+		// keep a reference to the input component so we can update it programmatically
+		// textComp is our reference to the input component
+
+		// Make input expand to available width
+		if (textComp.inputEl) {
+			textComp.inputEl.style.flex = "1 1 auto";
+		}
+
+		new ButtonComponent(controlsRow)
+			.setIcon("paste")
+			.setTooltip("Paste from clipboard")
+			.onClick(async () => {
+				try {
+					const clip = await navigator.clipboard.readText();
+					if (clip && clip.trim()) {
+						tweetUrl = clip;
+						if (textComp) textComp.setValue(clip);
+						new Notice("Pasted from clipboard");
+					} else {
+						new Notice("Clipboard is empty");
+					}
+				} catch (e) {
+					new Notice("Failed to read clipboard");
+				}
+			});
+
+		// Toggle below the input row: whether to open the saved note immediately
+		let openAfterSave = initialOpenAfterSave;
+		new Setting(this.contentEl)
+			.setName("Open after saving")
+			.setDesc("Open the saved tweet note after it is created")
+			.addToggle((toggle) =>
+				toggle.setValue(openAfterSave).onChange((v) => {
+					openAfterSave = v;
+				})
 			);
 
 		new Setting(this.contentEl)
@@ -109,7 +152,7 @@ export class TweetUrlModal extends Modal {
 					.setCta()
 					.onClick(() => {
 						this.close();
-						onSubmit(tweetUrl);
+						onSubmit(tweetUrl, openAfterSave);
 					})
 			)
 			.addButton((btn) =>
@@ -157,51 +200,61 @@ export default class XPostSaverPlugin extends Plugin {
 	}
 
 	openTweetUrlModal() {
-		new TweetUrlModal(this.app, async (tweetUrl) => {
-			if (tweetUrl.trim()) {
-				new Notice(`Fetching tweet data...`);
+		new TweetUrlModal(
+			this.app,
+			async (tweetUrl, openAfterSave: boolean) => {
+				if (tweetUrl.trim()) {
+					new Notice(`Fetching tweet data...`);
 
-				try {
-					// Encode the tweet URL for the API request
-					const encodedUrl = encodeURIComponent(tweetUrl);
-					const apiUrl = `https://publish.twitter.com/oembed?url=${encodedUrl}`;
+					try {
+						// Encode the tweet URL for the API request
+						const encodedUrl = encodeURIComponent(tweetUrl);
+						const apiUrl = `https://publish.twitter.com/oembed?url=${encodedUrl}`;
 
-					// Make GET request to Twitter publish API
-					const response = await this.requestWithRetries(
-						() =>
-							requestUrl({
-								url: apiUrl,
-								method: "GET",
-							}),
-						3,
-						2000
-					);
+						// Make GET request to Twitter publish API
+						const response = await this.requestWithRetries(
+							() =>
+								requestUrl({
+									url: apiUrl,
+									method: "GET",
+								}),
+							3,
+							2000
+						);
 
-					console.log("Response:", response.json);
+						// Extract the required fields
+						const { url, author_name, author_url, html } =
+							response.json;
 
-					// Extract the required fields
-					const { url, author_name, author_url, html } =
-						response.json;
+						// Extract tweet text from HTML
+						const tweetText = this.extractTweetText(html);
 
-					// Extract tweet text from HTML
-					const tweetText = this.extractTweetText(html);
+						// Save tweet as note (returns the file path)
+						const savedPath = await this.saveTweetAsNote({
+							url,
+							author_name,
+							author_url,
+							tweet_text: tweetText,
+						});
 
-					// Save tweet as note
-					await this.saveTweetAsNote({
-						url,
-						author_name,
-						author_url,
-						tweet_text: tweetText,
-					});
+						new Notice(`Tweet saved successfully!`);
 
-					new Notice(`Tweet saved successfully!`);
-				} catch (error) {
-					new Notice(`Error fetching tweet data`);
+						if (openAfterSave) {
+							const file =
+								this.app.vault.getAbstractFileByPath(savedPath);
+							if (file && file instanceof TFile) {
+								this.app.workspace.getLeaf().openFile(file);
+							}
+						}
+					} catch (error) {
+						new Notice(`Error fetching tweet data`);
+					}
+				} else {
+					new Notice("Please enter a valid tweet URL");
 				}
-			} else {
-				new Notice("Please enter a valid tweet URL");
-			}
-		}).open();
+			},
+			this.settings.openAfterSave
+		).open();
 	}
 
 	/**
@@ -273,7 +326,7 @@ export default class XPostSaverPlugin extends Plugin {
 		author_name: string;
 		author_url: string;
 		tweet_text: string;
-	}) {
+	}): Promise<string> {
 		try {
 			const { vault } = this.app;
 
@@ -322,6 +375,8 @@ export default class XPostSaverPlugin extends Plugin {
 			if (this.settings.copyPathToClipboard) {
 				await navigator.clipboard.writeText(`[[${filename}]]`);
 			}
+
+			return fullPath;
 		} catch (error) {
 			new Notice("Error saving tweet as note");
 			throw error;
